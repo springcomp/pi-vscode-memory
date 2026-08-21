@@ -1,0 +1,4 @@
+.agentic/
+coverage/
+dist/
+node_modules/
