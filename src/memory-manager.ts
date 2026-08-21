@@ -72,7 +72,7 @@ export function validateScopeBoundary(
     throw new Error('Memory file path must be relative');
   }
 
-  if (filePath.split(/[\\/]/).some((segment) => segment.startsWith('.'))) {
+  if (filePath !== '.' && filePath.split(/[\\/]/).some((segment) => segment.startsWith('.'))) {
     throw new Error('Memory file path must not contain traversal segments');
   }
 

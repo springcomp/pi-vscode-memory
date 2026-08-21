@@ -565,3 +565,142 @@ describe('operation path boundaries and dispatcher', () => {
     ).resolves.toEqual({ success: false, error: 'Unsupported memory operation: invalid' });
   });
 });
+
+describe('virtual paths', () => {
+  it.each([
+    ['/memories/notes.md', 'user'],
+    ['/memories/sessions/notes.md', 'repo'],
+    ['/memories/session/notes.md', 'session'],
+  ] as const)('resolves FQVP %s to scope %s without an explicit scope field', (path, scope) => {
+    const result = validateToolInput({ operation: 'view', path }, { sessionId: 'session-1' });
+    expect(result).toMatchObject({ scope, path: 'notes.md' });
+  });
+
+  it('defaults an unqualified virtual path (UQVP) to session scope', () => {
+    const result = validateToolInput(
+      { operation: 'view', path: 'notes.md' },
+      { sessionId: 'session-1' },
+    );
+    expect(result).toMatchObject({ scope: 'session', path: 'notes.md' });
+  });
+
+  it('honors an explicit scope for a UQVP', () => {
+    const result = validateToolInput({ operation: 'view', scope: 'repo', path: 'notes.md' });
+    expect(result).toMatchObject({ scope: 'repo', path: 'notes.md' });
+  });
+
+  it('accepts an FQVP whose encoded scope matches an explicit scope field', () => {
+    const result = validateToolInput({
+      operation: 'view',
+      scope: 'repo',
+      path: '/memories/sessions/notes.md',
+    });
+    expect(result).toMatchObject({ scope: 'repo', path: 'notes.md' });
+  });
+
+  it('rejects an FQVP whose encoded scope conflicts with an explicit scope field', () => {
+    expect(() =>
+      validateToolInput({ operation: 'view', scope: 'user', path: '/memories/sessions/notes.md' }),
+    ).toThrow(
+      "Scope 'user' does not match the scope encoded by virtual path '/memories/sessions/notes.md' ('repo')",
+    );
+  });
+
+  it.each([
+    ['/memories', 'user'],
+    ['/memories/', 'user'],
+    ['/memories/session', 'session'],
+    ['/memories/session/', 'session'],
+    ['/memories/sessions', 'repo'],
+    ['/memories/sessions/', 'repo'],
+  ] as const)('resolves scope root %s to the default memory.md note', (path, scope) => {
+    const result = validateToolInput({ operation: 'view', path }, { sessionId: 'session-1' });
+    expect(result).toMatchObject({ scope, path: 'memory.md' });
+  });
+
+  it('rejects a user-scoped file literally named "session" (claimed by the session prefix)', () => {
+    const result = validateToolInput(
+      { operation: 'view', path: '/memories/session' },
+      { sessionId: 'session-1' },
+    );
+    expect(result).toMatchObject({ scope: 'session', path: 'memory.md' });
+  });
+
+  it('allows a user-scoped file literally named "session.md"', () => {
+    const result = validateToolInput({ operation: 'view', path: '/memories/session.md' });
+    expect(result).toMatchObject({ scope: 'user', path: 'session.md' });
+  });
+
+  it.each([
+    ['/memories/*', 'user'],
+    ['/memories/session/*', 'session'],
+    ['/memories/sessions/*', 'repo'],
+  ] as const)('resolves literal %s to a directory listing request', (path, scope) => {
+    const result = validateToolInput({ operation: 'view', path }, { sessionId: 'session-1' });
+    expect(result).toMatchObject({ scope, path: '.' });
+  });
+
+  it('lists scope root entries end-to-end via a literal * request', async () => {
+    await writeFixture('alpha.md', 'a');
+    await writeFixture('beta.md', 'b');
+    const validated = validateToolInput(
+      { operation: 'view', path: '/memories/session/*' },
+      { sessionId },
+    );
+    const result = await execute(validated);
+    expect(result.success).toBe(true);
+    expect(result.data?.split('\n').sort()).toEqual(['alpha.md', 'beta.md']);
+  });
+
+  describe('rename combinations', () => {
+    it('renames UQVP to UQVP within the same (session) scope', () => {
+      const result = validateToolInput(
+        { operation: 'rename', path: 'old.md', newPath: 'new.md' },
+        { sessionId: 'session-1' },
+      );
+      expect(result).toMatchObject({ scope: 'session', path: 'old.md', newPath: 'new.md' });
+    });
+
+    it('renames FQVP to UQVP within the scope encoded by path', () => {
+      const result = validateToolInput({
+        operation: 'rename',
+        path: '/memories/sessions/old.md',
+        newPath: 'new.md',
+      });
+      expect(result).toMatchObject({ scope: 'repo', path: 'old.md', newPath: 'new.md' });
+    });
+
+    it('renames FQVP to FQVP when both encode the same scope', () => {
+      const result = validateToolInput({
+        operation: 'rename',
+        path: '/memories/sessions/old.md',
+        newPath: '/memories/sessions/new.md',
+      });
+      expect(result).toMatchObject({ scope: 'repo', path: 'old.md', newPath: 'new.md' });
+    });
+
+    it('rejects FQVP to FQVP rename across mismatched scopes', () => {
+      expect(() =>
+        validateToolInput({
+          operation: 'rename',
+          path: '/memories/sessions/old.md',
+          newPath: '/memories/new.md',
+        }),
+      ).toThrow(
+        "Scope 'repo' does not match the scope encoded by virtual path '/memories/new.md' ('user')",
+      );
+    });
+  });
+
+  it('executes an end-to-end view through a virtual path', async () => {
+    await writeFixture('vp-note.md', 'from virtual path');
+    const validated = validateToolInput(
+      { operation: 'view', path: '/memories/session/vp-note.md' },
+      { sessionId },
+    );
+    await expect(execute(validated)).resolves.toEqual({
+      success: true,
+      data: 'from virtual path',
+    });
+  });
+});

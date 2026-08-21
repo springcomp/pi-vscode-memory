@@ -7,7 +7,7 @@ Persistent, scoped notes for [pi](https://github.com/badlogic/pi-mono). The exte
 - [Overview](#overview)
 - [Installation](#installation)
 - [Tool schema](#tool-schema)
-- [Scopes](#scopes)
+- [Virtual paths](#virtual-paths)
 - [Operations](#operations)
 - [Usage examples](#usage-examples)
 - [Best practices](#best-practices)
@@ -16,21 +16,20 @@ Persistent, scoped notes for [pi](https://github.com/badlogic/pi-mono). The exte
 
 ## Overview
 
-`vscode_memory` provides three persistence boundaries:
+`vscode_memory` provides three persistence boundaries, selected entirely through the `path` you pass:
 
-| Scope | Best for | Shared with |
+| Path prefix | Best for | Shared with |
 | --- | --- | --- |
-| `session` | Current plan, findings, and handoff state | This session only |
-| `repo` | Verified commands, conventions, and decisions | All sessions in this repository |
-| `user` | Personal preferences and reusable templates | All repositories and sessions |
+| `/memories/session/...` | Current plan, findings, and handoff state | This session only |
+| `/memories/sessions/...` | Verified commands, conventions, and decisions | All sessions in this repository |
+| `/memories/...` | Personal preferences and reusable templates | All repositories and sessions |
 
 For example, create a plan for the current conversation:
 
 ```json
 {
-  "scope": "session",
   "operation": "create",
-  "path": "plan.md",
+  "path": "/memories/session/plan.md",
   "content": "# Plan\n1. Inspect\n2. Implement\n3. Verify"
 }
 ```
@@ -55,50 +54,64 @@ Tool name: `vscode_memory`.
 
 | Parameter | Type | Required for | Description |
 | --- | --- | --- | --- |
-| `scope` | `"session" \| "repo" \| "user"` | all | Persistence boundary |
 | `operation` | `"view" \| "create" \| "str_replace" \| "insert" \| "delete" \| "rename"` | all | Action to perform |
-| `path` | string | all | Non-empty relative path within the scope |
+| `path` | string | all | A fully qualified virtual path, e.g. `/memories/session/plan.md` |
 | `content` | string | `create`, `insert` | Text to write or insert |
 | `oldString` | string | `str_replace` | Exact, unique text to replace |
 | `newString` | string | `str_replace` | Replacement text |
 | `line` | positive integer | `insert` | One-indexed insertion line |
-| `newPath` | string | `rename` | Relative destination within the same scope |
+| `newPath` | string | `rename` | Fully qualified virtual destination |
 
-Paths cannot be absolute, contain `.` or `..` segments, null bytes, or line breaks. Content fields accept up to 1,000,000 characters; paths accept up to 1,024 characters.
+Paths cannot contain `.` or `..` segments, null bytes, or line breaks. Content fields accept up to 1,000,000 characters; paths accept up to 1,024 characters.
 
-## Scopes
+## Virtual paths
 
-### Session scope
+Every call is made against a fully qualified virtual path (FQVP): a single string that names both the memory scope and the file within it. There is no separate scope parameter to set.
 
-- **Location:** `~/.pi/agent/sessions/{REPO-DIR}/memories-{SESSION-ID}/`
-- **Use:** current task state, temporary findings, and agent handoffs.
-- **Lifetime:** until the corresponding session is deleted.
-- **Access:** only the current session; another session in the same repository has a different directory.
+| Virtual path form | Resolves to |
+| --- | --- |
+| `/memories/<file>` | User scope: `~/.pi/agent/memories/<file>` |
+| `/memories/sessions/<file>` | Repository scope: `~/.pi/agent/sessions/{REPO-DIR}/memories/<file>` |
+| `/memories/session/<file>` | Session scope (singular): `~/.pi/agent/sessions/{REPO-DIR}/memories-{SESSION-ID}/<file>` |
 
-### Repo scope
+`{REPO-DIR}` is pi's normalized directory identifier, for example `--C--Projects--app--`. The same `/memories/sessions/<file>` path therefore points at different storage in different repositories, and `/memories/session/<file>` points at different storage in different sessions, even though the path text looks identical.
 
-- **Location:** `~/.pi/agent/sessions/{REPO-DIR}/memories/`
-- **Use:** build commands, tested patterns, onboarding notes, and decision logs.
-- **Lifetime:** until the repository's pi session data is deleted.
-- **Access:** every session whose working directory resolves to this repository directory.
+### Scope roots and defaults
 
-### User scope
+| Path | Meaning |
+| --- | --- |
+| `/memories`, `/memories/` | User scope's default `memory.md` |
+| `/memories/session`, `/memories/session/` | Session scope's default `memory.md` |
+| `/memories/sessions`, `/memories/sessions/` | Repo scope's default `memory.md` |
+| `/memories/*` | List the user scope root's entries |
+| `/memories/session/*` | List the session scope root's entries |
+| `/memories/sessions/*` | List the repo scope root's entries |
+| `<file>` (no prefix) | Session scope's `<file>` (UQVP, defaults to session) |
 
-- **Location:** `~/.pi/agent/memories/`
-- **Use:** coding preferences, templates, and reusable insights.
-- **Lifetime:** indefinite, subject to deleting pi's user data.
-- **Access:** all repositories and sessions for the current user.
+Because `/memories/session` and `/memories/sessions` are claimed by the session and repo prefixes, a *user*-scoped file literally named `session` or `sessions` cannot be addressed this way — `/memories/session` always means the session scope root. A file named `session.md` (with an extension) is unaffected and resolves under user scope as expected, e.g. `/memories/session.md`.
 
-`{REPO-DIR}` is pi's normalized directory identifier, for example `--C--Projects--app--`.
+A literal trailing `*` segment requests an explicit directory listing of the scope root, equivalent to `view`-ing that scope's directory. It is distinct from the bare scope root, which addresses the default `memory.md` note.
+
+- **Session scope** (`/memories/session/...`): current task state, temporary findings, and agent handoffs. Lives until the session is deleted. Visible only to that session.
+- **Repository scope** (`/memories/sessions/...`): build commands, tested patterns, onboarding notes, and decision logs. Lives until the repository's pi session data is deleted. Visible to every session in that repository.
+- **User scope** (`/memories/...`): coding preferences, templates, and reusable insights. Lives indefinitely. Visible across all repositories and sessions for the current user.
+
+For `rename`, both `path` and `newPath` must resolve to the same scope; renaming across scopes is rejected.
 
 ## Operations
 
 ### `view`
 
-Reads a file or lists a directory's immediate entries. Reading a missing path succeeds with an empty result.
+Reads a file or lists a directory's immediate entries. Reading a missing path succeeds with a definite empty result (`Empty: '<path>' does not exist yet...`) — this is not an error and not transient. Do not retry the same `view` call expecting a different outcome; either `create` the file or move on.
 
 ```json
-{ "scope": "session", "operation": "view", "path": "memory.md" }
+{ "operation": "view", "path": "/memories/session/memory.md" }
+```
+
+List entries in a scope root explicitly with a literal `*`:
+
+```json
+{ "operation": "view", "path": "/memories/session/*" }
 ```
 
 ### `create`
@@ -107,9 +120,8 @@ Creates a new UTF-8 file and any missing parent directories. It fails if the des
 
 ```json
 {
-  "scope": "session",
   "operation": "create",
-  "path": "memory.md",
+  "path": "/memories/session/memory.md",
   "content": "# Session Plan\n- Inspect\n- Implement"
 }
 ```
@@ -120,9 +132,8 @@ Replaces one exact string. It fails when the file is absent, the string is absen
 
 ```json
 {
-  "scope": "session",
   "operation": "str_replace",
-  "path": "memory.md",
+  "path": "/memories/session/memory.md",
   "oldString": "- Inspect",
   "newString": "- Inspect (done)"
 }
@@ -134,9 +145,8 @@ Inserts content before a one-indexed line. A line past the end appends; a missin
 
 ```json
 {
-  "scope": "repo",
   "operation": "insert",
-  "path": "decisions.md",
+  "path": "/memories/sessions/decisions.md",
   "line": 5,
   "content": "## Decision\n- Prefer structured errors."
 }
@@ -147,37 +157,35 @@ Inserts content before a one-indexed line. A line past the end appends; a missin
 Recursively removes a file or directory. It is idempotent: a missing path is not an error.
 
 ```json
-{ "scope": "session", "operation": "delete", "path": "scratch.md" }
+{ "operation": "delete", "path": "/memories/session/scratch.md" }
 ```
 
 ### `rename`
 
-Moves or renames an existing item within its current scope. It fails when the source is missing or the destination exists.
+Moves or renames an existing item within its current scope. It fails when the source is missing, the destination exists, or `path` and `newPath` resolve to different scopes.
 
 ```json
 {
-  "scope": "repo",
   "operation": "rename",
-  "path": "draft.md",
-  "newPath": "decisions.md"
+  "path": "/memories/sessions/draft.md",
+  "newPath": "/memories/sessions/decisions.md"
 }
 ```
 
 ## Usage examples
 
-An agent can hand off a plan by creating `session/plan.md`; the next agent reads the same `session` path:
+An agent can hand off a plan by creating `/memories/session/plan.md`; the next agent reads the same session-scoped path:
 
 ```json
-{ "scope": "session", "operation": "view", "path": "plan.md" }
+{ "operation": "view", "path": "/memories/session/plan.md" }
 ```
 
-For repository knowledge that must survive sessions, write `repo/patterns/error-handling.md` and have later sessions view it:
+For repository knowledge that must survive sessions, write `/memories/sessions/patterns/error-handling.md` and have later sessions view it:
 
 ```json
 {
-  "scope": "repo",
   "operation": "create",
-  "path": "patterns/error-handling.md",
+  "path": "/memories/sessions/patterns/error-handling.md",
   "content": "# Error handling\n- Validate input\n- Return structured errors"
 }
 ```
@@ -186,9 +194,8 @@ For preferences available in every repository, save a user-level style guide:
 
 ```json
 {
-  "scope": "user",
   "operation": "create",
-  "path": "style-guide.md",
+  "path": "/memories/style-guide.md",
   "content": "# Style\n- Strict TypeScript\n- ESM modules"
 }
 ```
@@ -196,8 +203,8 @@ For preferences available in every repository, save a user-level style guide:
 ## Best practices
 
 - Use `memory.md`, `plan.md`, `findings.md`, and `decisions.md` for predictable discovery.
-- Organize durable notes under `patterns/`, `notes/`, or `templates/`.
-- Put temporary investigation state in `session`, verified project knowledge in `repo`, and personal defaults in `user`.
+- Organize durable notes under `patterns/`, `notes/`, or `templates/` within the chosen scope.
+- Put temporary investigation state under `/memories/session/...`, verified project knowledge under `/memories/sessions/...`, and personal defaults under `/memories/...`.
 - Include enough surrounding text in `oldString` to make `str_replace` unique.
 - Read existing memory before creating a durable note, because `create` never overwrites.
 
@@ -205,9 +212,9 @@ For preferences available in every repository, save a user-level style guide:
 
 | Symptom | Meaning and resolution |
 | --- | --- |
-| Empty `view` result | The path does not exist yet; use `create` if a file is needed. |
+| Empty `view` result | Definite: path does not exist. One `view` call is conclusive — do not retry. Use `create` if a file is needed. |
 | `Ambiguous: multiple matches found` | Make `oldString` more specific, then retry `str_replace`. |
-| Scope-boundary error | Use a relative path without absolute paths, `.`/`..`, hidden segments, null bytes, or newlines. |
+| Scope-boundary error | Use a virtual path without `.`/`..`, hidden segments, null bytes, or newlines. |
 | `File already exists` | Read and update the existing file, or choose another path. |
 | Tool absent from `/tools` | Confirm pi loads `src/index.ts` from this extension directory. |
 

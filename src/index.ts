@@ -20,11 +20,14 @@ export default function vscodeMemoryExtension(pi: ExtensionAPI): void {
         const result = await executeMemoryOperation(validated, sessionId, ctx.cwd);
 
         if (result.success) {
+          const isEmptyView = validated.operation === 'view' && !result.data;
           return {
             content: [
               {
                 type: 'text',
-                text: result.data || `Operation '${validated.operation}' completed successfully.`,
+                text: isEmptyView
+                  ? `Empty: '${validated.path}' does not exist yet (or is empty). Definite result, no need to retry.`
+                  : result.data || `Operation '${validated.operation}' completed successfully.`,
               },
             ],
             details: {

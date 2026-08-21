@@ -1,13 +1,21 @@
 # Prompting an LLM to use vscode/memory
 
-Use direct instructions that specify the scope, operation, path, and desired note content. The tool name is `vscode_memory`; its inputs are JSON objects.
+Use direct instructions that specify the operation, virtual path, and desired note content. The tool name is `vscode_memory`; its inputs are JSON objects. There is no separate scope field: the scope is encoded in the `path` itself as a fully qualified virtual path (FQVP).
+
+| Virtual path prefix | Scope |
+| --- | --- |
+| `/memories/session/...` | session (singular — this conversation only) |
+| `/memories/sessions/...` | repo (plural — shared by this repository) |
+| `/memories/...` | user (global) |
+
+A bare scope root (`/memories`, `/memories/session`, `/memories/sessions`) addresses that scope's default `memory.md`. A literal trailing `*` (`/memories/*`, `/memories/session/*`, `/memories/sessions/*`) instead lists the entries in that scope root.
 
 ## Plan agents
 
 ```text
 Store your implementation plan in session memory so the next agent can use it.
 Call vscode_memory with:
-{ "scope": "session", "operation": "create", "path": "plan.md", "content": "..." }
+{ "operation": "create", "path": "/memories/session/plan.md", "content": "..." }
 ```
 
 Ask a new agent to recover that handoff:
@@ -15,13 +23,13 @@ Ask a new agent to recover that handoff:
 ```text
 Read the plan left by the planning phase before changing code.
 Call vscode_memory with:
-{ "scope": "session", "operation": "view", "path": "plan.md" }
+{ "operation": "view", "path": "/memories/session/plan.md" }
 ```
 
 ## Handoffs
 
 ```text
-Update session/findings.md with the completed investigation. Use an exact, unique
+Update session findings.md with the completed investigation. Use an exact, unique
 oldString with str_replace; do not overwrite unrelated findings.
 ```
 
@@ -29,9 +37,8 @@ Example input:
 
 ```json
 {
-  "scope": "session",
   "operation": "str_replace",
-  "path": "findings.md",
+  "path": "/memories/session/findings.md",
   "oldString": "## Status\nInvestigating",
   "newString": "## Status\nCause confirmed"
 }
@@ -40,15 +47,14 @@ Example input:
 ## Repository knowledge base
 
 ```text
-Record the verified testing pattern in repo memory for future sessions. Create
+Record the verified testing pattern in repository memory for future sessions. Create
 patterns/isolated-fixtures.md with the command and the reason it is reliable.
 ```
 
 ```json
 {
-  "scope": "repo",
   "operation": "create",
-  "path": "patterns/isolated-fixtures.md",
+  "path": "/memories/sessions/patterns/isolated-fixtures.md",
   "content": "# Isolated fixtures\nUse a fresh temporary directory per test to prevent state leakage."
 }
 ```
@@ -57,18 +63,20 @@ patterns/isolated-fixtures.md with the command and the reason it is reliable.
 
 ```text
 Read my global coding preferences before proposing an implementation. Look for
-user/style-guide.md; if it is absent, proceed without inventing preferences.
+style-guide.md in user memory; if it is absent, proceed without inventing preferences.
 ```
 
 ```json
-{ "scope": "user", "operation": "view", "path": "style-guide.md" }
+{ "operation": "view", "path": "/memories/style-guide.md" }
 ```
 
 ## Reliable prompting rules
 
-- Tell the model which scope matches the lifetime and audience of the information.
-- Give a relative path such as `plan.md` or `patterns/errors.md`; never use absolute paths or `..`.
+- Tell the model which virtual path prefix matches the lifetime and audience of the information.
+- Give a fully qualified virtual path such as `/memories/session/plan.md` or `/memories/sessions/patterns/errors.md`; never use absolute filesystem paths or `..`.
 - Ask it to `view` before `create` when preserving existing knowledge matters.
+- Tell it an empty `view` result is definite (file absent), not a transient failure — one call settles it, never retry the same `view`.
 - For `str_replace`, require the model to include unique surrounding context in `oldString`.
 - Use `insert` with a positive one-indexed line; a line beyond the end appends.
+- For `rename`, both `path` and `newPath` must use the same virtual path prefix (same scope).
 - Ask the model to report tool errors rather than assuming a write succeeded.
