@@ -57,7 +57,7 @@ export interface RenameOperation extends BaseMemoryOperation {
   newPath: string;
 }
 
-/** Validated input for a `vscode_memory` tool call. */
+/** Validated input for a `memory` tool call. */
 export type MemoryInput =
   | ViewOperation
   | CreateOperation

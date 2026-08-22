@@ -125,8 +125,8 @@ describe('vscode-memory extension', () => {
 
     expect(registerTool).toHaveBeenCalledOnce();
     expect(registerTool.mock.calls[0][0]).toMatchObject({
-      name: 'vscode_memory',
-      label: 'VSCode Memory',
+      name: 'memory',
+      label: 'Persistent Memory',
       parameters: MemoryToolInputSchema,
     });
   });

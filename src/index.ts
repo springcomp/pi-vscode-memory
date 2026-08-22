@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import type { MemoryInput } from './types.js';
+import type { MemoryInput } from './types.ts';
 import {
   MemoryToolInputSchema,
   executeMemoryOperation,
@@ -8,10 +8,10 @@ import {
 
 export default function vscodeMemoryExtension(pi: ExtensionAPI): void {
   pi.registerTool({
-    name: 'vscode_memory',
-    label: 'VSCode Memory',
+    name: 'memory',
+    label: 'Persistent Memory',
     description:
-      'Store and retrieve persistent notes across session, repository, and user scopes. Operations: view, create, str_replace, insert, delete, rename.',
+      'Store and retrieve persistent facts across session (/memories/session), repository (/memories/sessions), and global (/memories) scopes. Each path is a fully qualified virtual path encoding its own scope. Operations: view (retrieve), create (new note), str_replace (update), insert (append line), delete (remove), rename (move file).',
     parameters: MemoryToolInputSchema,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {

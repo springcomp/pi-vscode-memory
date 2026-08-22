@@ -11,8 +11,8 @@ import {
 import { dirname, join } from 'node:path';
 import { type Static, Type } from 'typebox';
 import { Compile } from 'typebox/compile';
-import { buildScopePath, validateScopeBoundary } from './memory-manager.js';
-import type { MemoryInput, MemoryResult, MemoryScope } from './types.js';
+import { buildScopePath, validateScopeBoundary } from './memory-manager.ts';
+import type { MemoryInput, MemoryResult, MemoryScope } from './types.ts';
 
 const MAX_CONTENT_LENGTH = 1_000_000;
 const MAX_PATH_LENGTH = 1_024;

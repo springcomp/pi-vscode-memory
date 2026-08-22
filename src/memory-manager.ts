@@ -1,6 +1,6 @@
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import type { MemoryPath, MemoryScope, ScopePathOptions } from './types.js';
+import type { MemoryPath, MemoryScope, ScopePathOptions } from './types.ts';
 
 const WINDOWS_ABSOLUTE_PATH = /^[a-zA-Z]:[\\/]/;
 const PATH_SEPARATOR = /[\\/:]/g;
