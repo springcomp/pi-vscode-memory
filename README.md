@@ -1,6 +1,6 @@
 # vscode/memory
 
-Persistent, scoped notes for [pi](https://github.com/badlogic/pi-mono). The extension registers the `vscode_memory` tool so agents can keep plans, findings, decisions, and preferences outside the repository working tree.
+Persistent, scoped notes for [pi](https://github.com/badlogic/pi-mono). The extension registers the `memory` tool so agents can keep plans, findings, decisions, and preferences outside the repository working tree.
 
 ## Contents
 
@@ -16,7 +16,7 @@ Persistent, scoped notes for [pi](https://github.com/badlogic/pi-mono). The exte
 
 ## Overview
 
-`vscode_memory` provides three persistence boundaries, selected entirely through the `path` you pass:
+`memory` provides three persistence boundaries, selected entirely through the `path` you pass:
 
 | Path prefix | Best for | Shared with |
 | --- | --- | --- |
@@ -44,13 +44,13 @@ Copy this directory to pi's extensions directory:
 Copy-Item -Recurse . "$HOME\.pi\agent\extensions\vscode-memory"
 ```
 
-Run pi from that extension directory, or configure pi to load `src/index.ts`. Verify the extension loaded with pi's `/tools` command: it must list `vscode_memory`.
+Run pi from that extension directory, or configure pi to load `src/index.ts`. Verify the extension loaded with pi's `/tools` command: it must list `memory`.
 
 This project is not currently published as an npm or pip package. If it is published later, use the package's documented install command rather than copying the directory.
 
 ## Tool schema
 
-Tool name: `vscode_memory`.
+Tool name: `memory`.
 
 | Parameter | Type | Required for | Description |
 | --- | --- | --- | --- |

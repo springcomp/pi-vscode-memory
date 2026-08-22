@@ -1,6 +1,6 @@
 # vscode/memory workflows
 
-Each JSON block is an input to `vscode_memory`. Every `path` is a fully qualified virtual path (FQVP) that encodes its own scope — there is no separate `scope` field.
+Each JSON block is an input to `memory`. Every `path` is a fully qualified virtual path (FQVP) that encodes its own scope — there is no separate `scope` field.
 
 - `/memories/session/<file>` — session scope (this conversation only)
 - `/memories/sessions/<file>` — repo scope (shared by this repository)

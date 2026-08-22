@@ -4,7 +4,7 @@ import {
   MemoryToolInputSchema,
   executeMemoryOperation,
   validateToolInput,
-} from './vscode-memory.js';
+} from './vscode-memory.ts';
 
 export default function vscodeMemoryExtension(pi: ExtensionAPI): void {
   pi.registerTool({

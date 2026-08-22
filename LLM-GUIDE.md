@@ -1,6 +1,6 @@
 # Prompting an LLM to use vscode/memory
 
-Use direct instructions that specify the operation, virtual path, and desired note content. The tool name is `vscode_memory`; its inputs are JSON objects. There is no separate scope field: the scope is encoded in the `path` itself as a fully qualified virtual path (FQVP).
+Use direct instructions that specify the operation, virtual path, and desired note content. The tool name is `memory`; its inputs are JSON objects. There is no separate scope field: the scope is encoded in the `path` itself as a fully qualified virtual path (FQVP).
 
 | Virtual path prefix | Scope |
 | --- | --- |
@@ -14,7 +14,7 @@ A bare scope root (`/memories`, `/memories/session`, `/memories/sessions`) addre
 
 ```text
 Store your implementation plan in session memory so the next agent can use it.
-Call vscode_memory with:
+Call memory with:
 { "operation": "create", "path": "/memories/session/plan.md", "content": "..." }
 ```
 
@@ -22,7 +22,7 @@ Ask a new agent to recover that handoff:
 
 ```text
 Read the plan left by the planning phase before changing code.
-Call vscode_memory with:
+Call memory with:
 { "operation": "view", "path": "/memories/session/plan.md" }
 ```
 
